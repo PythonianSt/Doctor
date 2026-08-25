@@ -46,7 +46,7 @@ SURVEILLANCE_CODES = {
     "B30.9": "Viral conjunctivitis",
 }
 
-FIELDS = ["timestamp_bkk", "citizen_id", "keyword", "icd10", "diagnosis", "surveillance", "surveillance_name"]
+FIELDS = ["timestamp_bkk", "hn", "keyword", "icd10", "diagnosis", "surveillance", "surveillance_name"]
 
 BASE_HTML = '''
 <!doctype html><html lang="th"><head>
@@ -96,8 +96,8 @@ def logout():
 def doctor():
     buttons = "".join([f'<button class="kw" type="button" onclick="chooseKeyword(\'{k}\')">{k}</button>' for k in DIAGNOSIS_MAP])
     body = '''
-<div class="card"><h1>แพทย์: บันทึก Diagnosis → ICD-10</h1><div class="muted">ภาพที่ถ่ายใช้เพื่ออ่านเลขชั่วคราวและไม่บันทึกลง GitHub</div></div>
-<div class="card"><h2>1) ถ่ายเลขบัตรประชาชนจากเวชระเบียน</h2><input id="camera" type="file" accept="image/*" capture="environment"><img id="preview"><button type="button" onclick="readID()">AI อ่านเลข 13 หลัก</button><div id="ocrStatus" class="muted"></div><label>เลขบัตรประชาชน — กรุณาตรวจและ Confirm</label><input id="citizen_id" inputmode="numeric" maxlength="13" placeholder="13 หลัก"></div>
+<div class="card"><h1>แพทย์: บันทึก Diagnosis → ICD-10</h1><div class="muted">ภาพที่ถ่ายใช้เพื่ออ่าน HN ชั่วคราวและไม่บันทึกลง GitHub</div></div>
+<div class="card"><h2>1) ถ่าย HN จากเวชระเบียน</h2><input id="camera" type="file" accept="image/*" capture="environment"><img id="preview"><button type="button" onclick="readID()">AI อ่าน HN</button><div id="ocrStatus" class="muted"></div><label>HN — กรุณาตรวจและ Confirm</label><input id="hn" autocapitalize="characters" maxlength="32" placeholder="เช่น 00123456 หรือ 12/3456"></div>
 <div class="card"><h2>2) เลือก Keyword</h2><div class="grid">__BUTTONS__</div><p>เลือกแล้ว: <strong id="chosenKeyword">-</strong></p></div>
 <div class="card"><h2>3) เลือก ICD-10 ที่จำเพาะขึ้น</h2><select id="icdSelect"><option value="">โปรดเลือก Keyword ก่อน</option></select></div>
 <div class="card"><h2>4) Confirm & Save</h2><label><input id="confirm" type="checkbox" style="width:auto"> แพทย์ตรวจสอบเลขบัตรและ ICD-10 แล้ว</label><br><br><button type="button" onclick="saveRecord()">Save</button><p id="saveStatus"></p></div>
@@ -108,18 +108,18 @@ let selectedKeyword = "";
 const camera = document.getElementById("camera");
 camera.addEventListener("change",()=>{const f=camera.files[0];if(!f)return;const img=document.getElementById("preview");img.src=URL.createObjectURL(f);img.style.display="block";});
 function chooseKeyword(k){selectedKeyword=k;document.getElementById("chosenKeyword").textContent=k;const s=document.getElementById("icdSelect");s.innerHTML='<option value="">-- เลือก ICD-10 --</option>';MAP[k].forEach(x=>{const o=document.createElement("option");o.value=x[0]+"||"+x[1];o.textContent=x[0]+" — "+x[1];s.appendChild(o);});}
-async function readID(){const f=camera.files[0],st=document.getElementById("ocrStatus");if(!f){st.textContent="กรุณาถ่ายภาพก่อน";return;}st.textContent="กำลังอ่านเลข...";const fd=new FormData();fd.append("image",f);try{const r=await fetch("/api/read-id",{method:"POST",body:fd});const j=await r.json();if(!r.ok)throw new Error(j.error||"อ่านไม่สำเร็จ");document.getElementById("citizen_id").value=j.citizen_id||"";st.innerHTML='<span class="ok">อ่านแล้ว กรุณาเทียบกับเวชระเบียนและ Confirm</span>';}catch(e){st.innerHTML='<span class="danger">'+e.message+'</span>';}}
-async function saveRecord(){const cid=document.getElementById("citizen_id").value.replace(/\D/g,""),val=document.getElementById("icdSelect").value,confirmed=document.getElementById("confirm").checked,out=document.getElementById("saveStatus");if(cid.length!==13){out.innerHTML='<span class="danger">เลขบัตรต้องมี 13 หลัก</span>';return;}if(!selectedKeyword||!val){out.innerHTML='<span class="danger">กรุณาเลือก Keyword และ ICD-10</span>';return;}if(!confirmed){out.innerHTML='<span class="danger">กรุณา Confirm ก่อน Save</span>';return;}const [icd10,diagnosis]=val.split("||");out.textContent="กำลังบันทึก...";const r=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({citizen_id:cid,keyword:selectedKeyword,icd10,diagnosis})});const j=await r.json();if(!r.ok){out.innerHTML='<span class="danger">'+(j.error||"Save failed")+'</span>';return;}out.innerHTML='<span class="ok">บันทึกแล้ว '+j.timestamp_bkk+'</span>';document.getElementById("confirm").checked=false;}
+async function readID(){const f=camera.files[0],st=document.getElementById("ocrStatus");if(!f){st.textContent="กรุณาถ่ายภาพก่อน";return;}st.textContent="กำลังอ่าน HN...";const fd=new FormData();fd.append("image",f);try{const r=await fetch("/api/read-hn",{method:"POST",body:fd});const j=await r.json();if(!r.ok)throw new Error(j.error||"อ่านไม่สำเร็จ");document.getElementById("hn").value=j.hn||"";st.innerHTML='<span class="ok">อ่านแล้ว กรุณาเทียบกับเวชระเบียนและ Confirm</span>';}catch(e){st.innerHTML='<span class="danger">'+e.message+'</span>';}}
+async function saveRecord(){const hn=document.getElementById("hn").value.trim(),val=document.getElementById("icdSelect").value,confirmed=document.getElementById("confirm").checked,out=document.getElementById("saveStatus");if(!hn){out.innerHTML='<span class="danger">กรุณาตรวจสอบ HN</span>';return;}if(!selectedKeyword||!val){out.innerHTML='<span class="danger">กรุณาเลือก Keyword และ ICD-10</span>';return;}if(!confirmed){out.innerHTML='<span class="danger">กรุณา Confirm ก่อน Save</span>';return;}const [icd10,diagnosis]=val.split("||");out.textContent="กำลังบันทึก...";const r=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({hn:hn,keyword:selectedKeyword,icd10,diagnosis})});const j=await r.json();if(!r.ok){out.innerHTML='<span class="danger">'+(j.error||"Save failed")+'</span>';return;}out.innerHTML='<span class="ok">บันทึกแล้ว '+j.timestamp_bkk+'</span>';document.getElementById("confirm").checked=false;}
 </script>
 '''.replace("__BUTTONS__", buttons).replace("__MAP__", json.dumps(DIAGNOSIS_MAP, ensure_ascii=False))
     return render_page("Doctor", body)
 
-def openai_read_13_digits(image_bytes, mime):
+def openai_read_hn(image_bytes, mime):
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not configured")
     b64 = base64.b64encode(image_bytes).decode("ascii")
     payload = {"model": OPENAI_MODEL, "input": [{"role": "user", "content": [
-        {"type": "input_text", "text": "Read ONLY the Thai national ID number visible in this medical-record image. Return exactly 13 digits with no spaces, punctuation, explanation, or other text. If a confident 13-digit number is not visible, return UNKNOWN."},
+        {"type": "input_text", "text": "Read ONLY the patient HN (Hospital Number) visible in this medical-record image. Return only the HN exactly as printed, preserving leading zeros and any letters, slash, or hyphen. Do not return labels, names, explanations, or other text. If a confident HN is not visible, return UNKNOWN."},
         {"type": "input_image", "image_url": f"data:{mime};base64,{b64}"}
     ]}]}
     r = requests.post("https://api.openai.com/v1/responses", headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}, json=payload, timeout=30)
@@ -130,20 +130,25 @@ def openai_read_13_digits(image_bytes, mime):
         for c in item.get("content", []):
             if c.get("type") in ("output_text", "text"):
                 text += c.get("text", "")
-    m = re.search(r"\b(\d{13})\b", text)
+    text = text.strip()
+    if not text or text.upper() == "UNKNOWN":
+        return ""
+    # Accept common HN formats while preserving leading zeros.
+    # Limit length to reduce accidental capture of unrelated text.
+    m = re.search(r"(?i)\b([A-Z0-9][A-Z0-9\-/]{1,31})\b", text)
     return m.group(1) if m else ""
 
-@app.post("/api/read-id")
+@app.post("/api/read-hn")
 @require_role("doctor")
-def read_id():
+def read_hn():
     f = request.files.get("image")
     if not f: return jsonify(error="ไม่พบภาพ"), 400
     raw = f.read()
     if len(raw) > 8*1024*1024: return jsonify(error="ภาพใหญ่เกิน 8 MB"), 400
     try:
-        cid = openai_read_13_digits(raw, f.mimetype or "image/jpeg")
-        if not cid: return jsonify(error="AI อ่านเลขไม่ชัด กรุณากรอกเอง"), 422
-        return jsonify(citizen_id=cid)
+        hn = openai_read_hn(raw, f.mimetype or "image/jpeg")
+        if not hn: return jsonify(error="AI อ่าน HN ไม่ชัด กรุณากรอกเอง"), 422
+        return jsonify(hn=hn)
     finally:
         raw = b""
 
@@ -181,12 +186,12 @@ def append_record_with_retry(record, max_attempts=5):
 @app.post("/api/save")
 @require_role("doctor")
 def save():
-    j = request.get_json(force=True); cid = re.sub(r"\D", "", j.get("citizen_id", "")); kw = j.get("keyword", ""); icd10 = j.get("icd10", "").strip(); diagnosis = j.get("diagnosis", "").strip()
-    if len(cid) != 13: return jsonify(error="เลขบัตรไม่ครบ 13 หลัก"), 400
+    j = request.get_json(force=True); hn = str(j.get("hn", "")).strip(); kw = j.get("keyword", ""); icd10 = j.get("icd10", "").strip(); diagnosis = j.get("diagnosis", "").strip()
+    if not hn or len(hn) > 32 or not re.fullmatch(r"[A-Za-z0-9\-/]+", hn): return jsonify(error="HN ไม่ถูกต้อง"), 400
     if kw not in DIAGNOSIS_MAP: return jsonify(error="Keyword ไม่ถูกต้อง"), 400
     if (icd10, diagnosis) not in {(x[0], x[1]) for x in DIAGNOSIS_MAP[kw]}: return jsonify(error="ICD-10 ไม่ตรงกับรายการที่อนุญาต"), 400
     sname = SURVEILLANCE_CODES.get(icd10, "")
-    record = {"timestamp_bkk": datetime.now(BKK).isoformat(timespec="seconds"), "citizen_id": cid, "keyword": kw, "icd10": icd10, "diagnosis": diagnosis, "surveillance": "Y" if sname else "N", "surveillance_name": sname}
+    record = {"timestamp_bkk": datetime.now(BKK).isoformat(timespec="seconds"), "hn": hn, "keyword": kw, "icd10": icd10, "diagnosis": diagnosis, "surveillance": "Y" if sname else "N", "surveillance_name": sname}
     try: append_record_with_retry(record)
     except Exception as e: return jsonify(error=str(e)), 500
     return jsonify(ok=True, timestamp_bkk=record["timestamp_bkk"])
@@ -221,11 +226,11 @@ def dashboard():
     count_html = "".join([f'<span class="pill"><b>{code}</b> {name}: {n}</span>' for (code, name), n in sorted(counts.items(), key=lambda x: -x[1])]) or '<span class="muted">ยังไม่มีรายการในช่วงที่เลือก</span>'
     trs = ""
     for r in sorted(rows, key=lambda x: x.get("timestamp_bkk", ""), reverse=True):
-        cid = r.get("citizen_id", ""); masked = ("x"*9 + cid[-4:]) if len(cid) == 13 else cid
+        hn = r.get("hn", ""); masked = (("x" * max(0, len(hn)-4)) + hn[-4:]) if len(hn) > 4 else hn
         trs += f"<tr><td>{r.get('timestamp_bkk','')}</td><td>{masked}</td><td>{r.get('icd10','')}</td><td>{r.get('surveillance_name','')}</td></tr>"
     labels = [("day","วันนี้"),("week","สัปดาห์นี้"),("month","เดือนนี้"),("year","ปีนี้"),("all","ทั้งหมด")]
     opts = "".join([f'<option value="{x}" {"selected" if x==mode else ""}>{label}</option>' for x, label in labels])
-    body = f'<div class="card"><h1>Dashboard รง.501 / โรคเฝ้าระวัง</h1><div class="muted">ต้นแบบนี้ใช้ surveillance mapping ตัวอย่าง ต้องตรวจเทียบกับบัญชี DDC/แนวทางหน่วยงานก่อนใช้งานจริง</div></div><div class="card"><form method="get"><label>ช่วงเวลา</label><select name="mode" onchange="this.form.submit()">{opts}</select></form><h2>รวม {len(rows)} ราย</h2>{count_html}{f"<p class=\"danger\">{err}</p>" if err else ""}</div><div class="card scroll"><table><thead><tr><th>เวลา</th><th>ID (masked)</th><th>ICD-10</th><th>โรคเฝ้าระวัง</th></tr></thead><tbody>{trs}</tbody></table></div><div class="card"><a class="btn secondary" href="/logout">ออกจากระบบ</a></div>'
+    body = f'<div class="card"><h1>Dashboard รง.501 / โรคเฝ้าระวัง</h1><div class="muted">ต้นแบบนี้ใช้ surveillance mapping ตัวอย่าง ต้องตรวจเทียบกับบัญชี DDC/แนวทางหน่วยงานก่อนใช้งานจริง</div></div><div class="card"><form method="get"><label>ช่วงเวลา</label><select name="mode" onchange="this.form.submit()">{opts}</select></form><h2>รวม {len(rows)} ราย</h2>{count_html}{f"<p class=\"danger\">{err}</p>" if err else ""}</div><div class="card scroll"><table><thead><tr><th>เวลา</th><th>HN (masked)</th><th>ICD-10</th><th>โรคเฝ้าระวัง</th></tr></thead><tbody>{trs}</tbody></table></div><div class="card"><a class="btn secondary" href="/logout">ออกจากระบบ</a></div>'
     return render_page("Dashboard", body)
 
 @app.get("/health")
